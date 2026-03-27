@@ -1,0 +1,17 @@
+\section{Background}
+
+\subsection{Flash Loans in DeFi}
+
+A flash loan is a special type of uncollateralized loan that exists only within a single blockchain transaction. Unlike traditional loans, it does not rely on pre-deposited collateral. Instead, it relies on transaction atomicity. This means that all required steps, including borrowing, custom operations, and repayment, must be completed before the transaction ends. If the repayment condition is not satisfied, the entire transaction reverts and no state change is committed to the blockchain.
+
+Flash loans are widely used in DeFi because they provide temporary access to liquidity. This makes them useful for activities such as arbitrage, liquidation, debt refinancing, and collateral swaps. However, the same property also allows malicious users to combine large borrowed funds with protocol design flaws, which can amplify the impact of economic attacks.
+
+\subsection{Interaction Between Flash Loan Providers and Users}
+
+The interaction between a flash loan provider and a user follows a fixed logical structure based on the atomic execution model of blockchain transactions. In general, the user does not borrow funds directly from a human-operated service. Instead, the user interacts with a smart contract interface exposed by the flash loan provider, and the actual borrowing logic is executed automatically by the protocol.
+
+A typical interaction process can be described in seven steps. First, the user deploys or invokes a receiver contract that is able to request a flash loan and execute follow-up operations. Second, this receiver contract sends a borrowing request to the flash loan provider, specifying the target asset, the requested amount, and the callback logic to be executed. Third, the provider transfers the requested asset to the receiver contract. Fourth, after the transfer, the provider invokes a predefined callback function on the receiver contract, allowing the user to execute custom logic inside the same transaction. Fifth, the receiver contract uses the borrowed funds to perform one or more operations, such as token swaps, arbitrage across exchanges, liquidations, or collateral restructuring. Sixth, before the transaction finishes, the receiver contract must repay the borrowed principal together with the required fee, or otherwise restore the protocol-specific economic condition required by the lender. Finally, the flash loan provider verifies whether repayment conditions are satisfied. If the verification succeeds, the transaction is committed. If not, the transaction is reverted in full.
+
+From the provider's perspective, the protocol performs three main tasks: it supplies temporary liquidity, triggers the callback-based execution, and validates repayment before the transaction ends. From the user's perspective, the receiver contract performs three corresponding tasks: requesting the loan, executing strategy logic in the callback, and ensuring that the principal and fee can be returned within the same transaction. Therefore, a flash loan should not be understood as free borrowing. It is more accurately described as temporary access to liquidity under strict atomic repayment constraints.
+
+The general interaction model above is shared by multiple DeFi protocols, but the concrete entrypoints, callback functions, and repayment checks differ. Therefore, the next section summarizes the protocol-specific interaction flows of Aave, Balancer V2, and Uniswap V2 in detail.

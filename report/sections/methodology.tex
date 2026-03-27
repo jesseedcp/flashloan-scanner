@@ -1,0 +1,5 @@
+\section{Methodology}
+
+Our methodology consists of three stages. First, we collect candidate transactions from known flash loan protocols and related on-chain signals. Second, we verify whether these candidate transactions follow the flash loan execution pattern of borrowing, callback-based execution, and repayment within the same transaction. Third, we analyze the verified transactions and summarize their usage patterns.
+
+The first version of the detector uses protocol-specific rules derived from official documentation and prior studies. For example, the detector can look for Aave flash loan calls and callbacks, Balancer Vault flash loan invocations, or Uniswap V2 flash swap structures. This design keeps the detection logic interpretable and suitable for manual validation.

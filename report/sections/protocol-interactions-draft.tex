@@ -1,0 +1,39 @@
+\section{Protocol-Specific Interaction Flows}
+
+This section summarizes how three representative protocols expose flash-loan-like functionality and how users interact with them through receiver contracts. Although the general structure is always borrow, execute custom logic, and repay within one transaction, the concrete entrypoints, callbacks, and verification logic differ across protocols.
+
+\subsection{Aave}
+
+Aave provides explicit flash loan interfaces through \texttt{flashLoan(...)} and \texttt{flashLoanSimple(...)}. The user usually interacts with Aave through a receiver contract rather than calling the protocol as an externally owned account only. After the receiver contract requests the loan, Aave Pool transfers the requested asset or assets and then invokes the callback function \texttt{executeOperation(...)}. Inside this callback, the receiver contract can perform arbitrage, liquidation, debt restructuring, or token swaps. Before the transaction ends, the receiver contract must make sure that Aave can recover the borrowed principal together with the premium. If this condition is not satisfied, the whole transaction reverts.
+
+Aave's interaction flow is suitable for flash loan detection because it exposes clear protocol entrypoints and an explicit callback-based execution structure.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.95\textwidth]{figures/aave-flow.pdf}
+    \caption{Interaction flow between users and Aave flash loan provider.}
+\end{figure}
+
+\subsection{Balancer V2}
+
+Balancer V2 provides flash loans through its Vault contract. In this design, the Vault acts as the liquidity provider and central asset manager. A recipient contract sends a \texttt{flashLoan(...)} request to the Vault, specifying the borrowed tokens, amounts, and user-defined data. The Vault first transfers the assets and then invokes the callback function \texttt{receiveFlashLoan(...)} on the recipient contract. The recipient contract uses the borrowed funds to execute strategy logic and then returns the borrowed assets to the Vault within the same transaction. The Vault checks whether the balances are restored as required; otherwise, the transaction reverts.
+
+Compared with other protocols, Balancer V2 has a relatively centralized lender-side structure because the Vault is the main contract responsible for flash loan execution and repayment verification.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.95\textwidth]{figures/balancer-flow.pdf}
+    \caption{Interaction flow between users and Balancer V2 flash loan provider.}
+\end{figure}
+
+\subsection{Uniswap V2}
+
+Uniswap V2 does not provide a separate function named flash loan. Instead, it supports flash-loan-like behavior through flash swaps. A user-controlled contract invokes the pair contract's \texttt{swap(...)} function with non-empty callback data. The pair contract transfers out the requested token first and then invokes the callback function \texttt{uniswapV2Call(...)} on the receiver contract. Inside the callback, the receiver contract performs its custom logic, such as arbitrage or routing across other DeFi protocols. Before the transaction ends, the receiver contract must transfer enough assets back to the pair contract so that the pair's required invariant is preserved. If the invariant is not satisfied, the transaction reverts.
+
+This interaction pattern is important because it shows that flash-loan-like behavior is not always exposed through an explicit \texttt{flashLoan(...)} API. In Uniswap V2, it is embedded in the swap mechanism itself.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.95\textwidth]{figures/uniswapv2-flow.pdf}
+    \caption{Interaction flow between users and Uniswap V2 flash swap provider.}
+\end{figure}

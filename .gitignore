@@ -32,3 +32,26 @@ go.work.sum
 .vscode/
 flashloan-scanner.exe
 scan-console.log
+
+# Frontend dependencies and build outputs
+frontend/node_modules/
+frontend/dist/
+frontend/*.tsbuildinfo
+frontend/*.log
+
+# LaTeX build artifacts
+report/**/*.aux
+report/**/*.log
+report/**/*.out
+report/**/*.toc
+report/**/*.pdf
+translated/*.aux
+translated/*.log
+translated/*.out
+translated/*.pdf
+
+# Downloaded reference papers
+3457977.3460301.pdf
+3457977.3460301.txt
+flashsyn-icse24.pdf
+flashsyn-icse24.txt
