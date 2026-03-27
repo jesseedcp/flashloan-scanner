@@ -1,0 +1,88 @@
+slave_db_enable: false
+private_key: "0x"
+num_confirmations: 10
+safe_abort_nonce_too_low_count: 3
+caller_address: "0x"
+enable_api_cache: false
+
+server:
+  host: 0.0.0.0
+  port: 8080
+
+websocket_server:
+  host: 0.0.0.0
+  port: 8082
+
+metrics:
+  host: 0.0.0.0
+  port: 8081
+
+rpcs:
+  - rpc_url: ''
+    chain_id: 11155420
+    start_block: 8834368
+    header_buffer_size: 20
+    event_unpack_block: 8834368
+    contracts:
+      pool_manager_address: "0x"
+      message_manager_address: "0x"
+
+  - rpc_url: ''
+    chain_id: 11155420
+    start_block: 8834368
+    header_buffer_size: 20
+    event_unpack_block: 8834368
+    contracts:
+      pool_manager_address: "0x"
+      message_manager_address: "0x"
+
+  - rpc_url: ''
+    chain_id: 11155420
+    start_block: 8834368
+    header_buffer_size: 20
+    event_unpack_block: 8834368
+    contracts:
+      pool_manager_address: "0x"
+      message_manager_address: "0x"
+
+master_db:
+  db_host: ""
+  db_port: 5432
+  db_user: ""
+  db_password: ""
+  db_name: "flashloan_scanner"
+
+slave_db:
+  db_host: "127.0.0.1"
+  db_port: 5432
+  db_user: ""
+  db_password: ""
+  db_name: "flashloan_scanner"
+
+
+scanner:
+  enabled: false
+  protocol: "aave_v3"
+  chain_id: 1
+  run_mode: "once"
+  start_block: 0
+  end_block: 0
+  batch_size: 500
+  loop_interval_seconds: 5
+  skip_tx_fetch: false
+  trace_enabled: false
+  aave:
+    pools:
+      - "0x0000000000000000000000000000000000000000"
+  balancer:
+    vaults:
+      - "0x0000000000000000000000000000000000000000"
+  uniswap_v2:
+    factories:
+      - "0x0000000000000000000000000000000000000000"
+    pairs:
+      - factory_address: "0x0000000000000000000000000000000000000000"
+        pair_address: "0x0000000000000000000000000000000000000000"
+        token0: "0x0000000000000000000000000000000000000001"
+        token1: "0x0000000000000000000000000000000000000002"
+        created_block: 0

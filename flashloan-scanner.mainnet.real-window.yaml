@@ -1,0 +1,66 @@
+slave_db_enable: false
+private_key: "cadf7450f8a7f15b5a3c9eb094b7de3fcef85465ee3de3d3a3bb687f31c79289"
+num_confirmations: 10
+safe_abort_nonce_too_low_count: 3
+caller_address: "0x155c8B4995b43C951016eb381478714b1e7f0e83"
+enable_api_cache: false
+gas_oracle_endpoint: "127.0.0.1:8081"
+
+server:
+  host: 0.0.0.0
+  port: 8082
+
+metrics:
+  host: 0.0.0.0
+  port: 8083
+
+rpcs:
+  - rpc_url: 'https://eth-mainnet.g.alchemy.com/v2/afSCtxPWD3NE5vSjJm2GQ'
+    chain_id: 1
+    start_block: 22485844
+    header_buffer_size: 500
+    event_unpack_block: 22485844
+    contracts:
+      pool_manager_address: "0x0000000000000000000000000000000000000000"
+      message_manager_address: "0x0000000000000000000000000000000000000000"
+
+master_db:
+  db_host: "127.0.0.1"
+  db_port: 5432
+  db_user: "postgres"
+  db_password: "89966336"
+  db_name: "flashloan_scanner"
+
+slave_db:
+  db_host: "127.0.0.1"
+  db_port: 5432
+  db_user: "postgres"
+  db_password: "89966336"
+  db_name: "flashloan_scanner"
+
+scanner:
+  enabled: true
+  protocol: "uniswap_v2"
+  chain_id: 1
+  run_mode: "once"
+  start_block: 22485844
+  end_block: 22486844
+  batch_size: 500
+  loop_interval_seconds: 5
+  skip_tx_fetch: true
+  trace_enabled: true
+  aave:
+    pools:
+      - "0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2"
+  balancer:
+    vaults:
+      - "0xBA12222222228d8Ba445958a75a0704d566BF2C8"
+  uniswap_v2:
+    factories:
+      - "0x5C69bEe701ef814A2B6a3EDD4B1652CB9cc5aA6f"
+    pairs:
+      - factory_address: "0x5C69bEe701ef814A2B6a3EDD4B1652CB9cc5aA6f"
+        pair_address: "0xCe407CD7b95B39d3B4d53065E711e713dd5C5999"
+        token0: "0xD233D1f6FD11640081ab8db125f722b5dc729dc5"
+        token1: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+        created_block: 22485844
