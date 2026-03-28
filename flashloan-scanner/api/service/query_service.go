@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/big"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -47,6 +48,17 @@ type TransactionDetailResponse struct {
 	TxHash                 string                    `json:"tx_hash"`
 	ChainID                uint64                    `json:"chain_id"`
 	BlockNumber            string                    `json:"block_number"`
+	Timestamp              uint64                    `json:"timestamp,omitempty"`
+	TxIndex                uint64                    `json:"tx_index,omitempty"`
+	FromAddress            string                    `json:"from_address,omitempty"`
+	ToAddress              string                    `json:"to_address,omitempty"`
+	Status                 uint8                     `json:"status,omitempty"`
+	Value                  string                    `json:"value,omitempty"`
+	InputData              string                    `json:"input_data,omitempty"`
+	MethodSelector         string                    `json:"method_selector,omitempty"`
+	GasUsed                string                    `json:"gas_used,omitempty"`
+	EffectiveGasPrice      string                    `json:"effective_gas_price,omitempty"`
+	TransactionFee         string                    `json:"transaction_fee,omitempty"`
 	Candidate              bool                      `json:"candidate"`
 	Verified               bool                      `json:"verified"`
 	Strict                 bool                      `json:"strict"`
@@ -56,6 +68,7 @@ type TransactionDetailResponse struct {
 	Protocols              []string                  `json:"protocols"`
 	Summary                TransactionDetailSummary  `json:"summary"`
 	TraceSummary           *TransactionTraceSummary  `json:"trace_summary,omitempty"`
+	FundFlowGraph          *FundFlowGraph            `json:"fund_flow_graph,omitempty"`
 	Interactions           []InteractionDetailResult `json:"interactions"`
 }
 
@@ -212,6 +225,7 @@ func (s *QueryService) GetTransactionDetail(ctx context.Context, chainID uint64,
 		TxHash:                 report.Tx.TxHash.Hex(),
 		ChainID:                report.Tx.ChainID,
 		BlockNumber:            bigIntToString(report.Tx.BlockNumber),
+		Timestamp:              report.Tx.Timestamp,
 		Candidate:              report.Tx.ContainsCandidateInteraction,
 		Verified:               report.Tx.ContainsVerifiedInteraction,
 		Strict:                 report.Tx.ContainsVerifiedStrictInteraction,
@@ -221,11 +235,45 @@ func (s *QueryService) GetTransactionDetail(ctx context.Context, chainID uint64,
 		Protocols:              splitProtocols(report.Tx.Protocols),
 		Interactions:           make([]InteractionDetailResult, 0, len(reports[0].Interactions)),
 	}
+
+	observedTx, err := s.db.ObservedTx.GetObservedTransaction(chainID, common.HexToHash(txHash))
+	if err != nil {
+		return nil, err
+	}
+	if observedTx != nil {
+		response.TxIndex = observedTx.TxIndex
+		response.FromAddress = observedTx.FromAddress.Hex()
+		response.ToAddress = addressToString(observedTx.ToAddress)
+		response.Status = observedTx.Status
+		response.Value = bigIntToString(observedTx.Value)
+		response.InputData = observedTx.InputData
+		response.MethodSelector = observedTx.MethodSelector
+		response.GasUsed = bigIntToString(observedTx.GasUsed)
+		response.EffectiveGasPrice = bigIntToString(observedTx.EffectiveGasPrice)
+		response.TransactionFee = multiplyBigIntsToString(observedTx.GasUsed, observedTx.EffectiveGasPrice)
+	}
+	if response.Timestamp == 0 {
+		response.Timestamp, err = s.lookupBlockTimestamp(chainID, response.BlockNumber)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	for _, interaction := range report.Interactions {
 		response.Interactions = append(response.Interactions, mapInteractionDetail(interaction.Interaction, interaction.Legs))
 	}
 	response.Summary = buildTransactionDetailSummary(response)
-	response.TraceSummary = buildTransactionTraceSummary(ctx, s.traceProviderSource, chainID, txHash, response.Interactions)
+	storedTrace, err := s.db.TransactionTrace.GetTransactionTrace(chainID, common.HexToHash(txHash))
+	if err != nil {
+		return nil, err
+	}
+	if storedTrace != nil {
+		response.TraceSummary = buildTransactionTraceSummaryFromJSON(storedTrace.TraceJSON, response.Interactions)
+	}
+	if response.TraceSummary == nil || response.TraceSummary.Status != traceStatusAvailable {
+		response.TraceSummary = buildTransactionTraceSummary(ctx, s.traceProviderSource, chainID, txHash, response.Interactions)
+	}
+	response.FundFlowGraph = buildFundFlowGraph(response)
 	return response, nil
 }
 
@@ -460,11 +508,36 @@ func splitProtocols(raw string) []string {
 	return out
 }
 
+func (s *QueryService) lookupBlockTimestamp(chainID uint64, blockNumber string) (uint64, error) {
+	if strings.TrimSpace(blockNumber) == "" {
+		return 0, nil
+	}
+	parsed, err := strconv.ParseUint(blockNumber, 10, 64)
+	if err != nil {
+		return 0, nil
+	}
+	timestamp, err := s.db.Blocks.BlockTimeStampByNum(strconv.FormatUint(chainID, 10), parsed)
+	if err != nil {
+		return 0, err
+	}
+	if timestamp < 0 {
+		return 0, nil
+	}
+	return uint64(timestamp), nil
+}
+
 func bigIntToString(value *big.Int) string {
 	if value == nil {
 		return ""
 	}
 	return value.String()
+}
+
+func multiplyBigIntsToString(left *big.Int, right *big.Int) string {
+	if left == nil || right == nil {
+		return ""
+	}
+	return new(big.Int).Mul(left, right).String()
 }
 
 func stringPtrValue(value *string) string {

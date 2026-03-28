@@ -64,7 +64,10 @@ func BuildAaveV3Runner(
 	}
 	var interactionVerifier scannerverifier.InteractionVerifier = verifier
 	if cfg.TraceEnabled {
-		traceVerifier, err := scannerverifier.NewAaveV3TraceVerifier(verifier, scannertrace.NewGethProvider(rawClient))
+		traceProvider := scannertrace.NewCachedProvider(
+			scannertrace.NewPersistingProvider(scannertrace.NewGethProvider(rawClient), chainID, store),
+		)
+		traceVerifier, err := scannerverifier.NewAaveV3TraceVerifier(verifier, traceProvider)
 		if err != nil {
 			return nil, err
 		}

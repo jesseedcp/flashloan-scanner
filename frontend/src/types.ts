@@ -57,6 +57,17 @@ export type TransactionDetailResponse = {
   tx_hash: string
   chain_id: number
   block_number: string
+  timestamp?: number
+  tx_index?: number
+  from_address?: string
+  to_address?: string
+  status?: number
+  value?: string
+  input_data?: string
+  method_selector?: string
+  gas_used?: string
+  effective_gas_price?: string
+  transaction_fee?: string
   candidate: boolean
   verified: boolean
   strict: boolean
@@ -96,6 +107,33 @@ export type TransactionDetailResponse = {
       debt_opening_count: number
       exclusion_reasons: string[]
     }
+  }
+  fund_flow_graph?: {
+    status: string
+    empty_label?: string
+    lanes?: Array<{
+      id: string
+      label: string
+      asset_address?: string
+      sublabel?: string
+      nodes: Array<{
+        id: string
+        roles: string[]
+        title: string
+        subtitle: string
+        address?: string
+      }>
+      segments: Array<{
+        id: string
+        from: string
+        to: string
+        action: string
+        asset: string
+        asset_address?: string
+        amount: string
+        tone: 'borrow' | 'swap' | 'repay'
+      }>
+    }>
   }
   trace_summary?: {
     status: string

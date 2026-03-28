@@ -55,6 +55,8 @@ type Dictionary = {
   detailOverviewCopy: string
   protocolEvidence: string
   protocolEvidenceCopy: string
+  combinedEvidence: string
+  combinedEvidenceCopy: string
   protocolCountLabel: string
   interactionCountLabel: string
   strictInteractionCountLabel: string
@@ -68,6 +70,12 @@ type Dictionary = {
   detectionConclusion: string
   detectionConclusionCopy: string
   keyReasons: string
+  rawEvidence: string
+  rawEvidenceCopy: string
+  expandAddressList: string
+  expandSequenceDiagram: string
+  expandCallChain: string
+  expandInteractionEvidence: string
   addressGraph: string
   addressGraphCopy: string
   sequenceDiagram: string
@@ -207,6 +215,8 @@ const dictionaries: Record<Language, Dictionary> = {
     detailOverviewCopy: '先确认这笔交易涉及哪些协议、识别到多少交互以及最终判定，再往下看地址和证据。',
     protocolEvidence: '协议识别证据',
     protocolEvidenceCopy: '汇总协议命中范围、交互规模和最终判定，先回答“这笔交易为什么值得继续看”。',
+    combinedEvidence: '调用与规则证据',
+    combinedEvidenceCopy: '先看 trace 调用路径是否形成借出、回调、归还和结算闭环，再看规则层为什么最终判定通过或排除。',
     protocolCountLabel: '涉及协议',
     interactionCountLabel: '识别交互',
     strictInteractionCountLabel: '严格交互',
@@ -220,10 +230,16 @@ const dictionaries: Record<Language, Dictionary> = {
     detectionConclusion: '扫描器结论',
     detectionConclusionCopy: '把当前详情页已有证据整理成人话，便于答辩时快速说明为什么命中。',
     keyReasons: '关键依据',
+    rawEvidence: '证据底稿',
+    rawEvidenceCopy: '这一层保留原始协议交互和完整内部调用，适合在追问时回看底层细节。',
+    expandAddressList: '展开参与地址清单',
+    expandSequenceDiagram: '展开调用顺序图',
+    expandCallChain: '展开内部调用底稿',
+    expandInteractionEvidence: '展开协议交互底稿',
     addressGraph: '关键地址关系图',
-    addressGraphCopy: '用关键地址和资产腿概括这笔交易中“谁参与了、资产往哪里走”。',
-    sequenceDiagram: '轻量时序图',
-    sequenceDiagramCopy: '按入口、借出、归还和验证顺序展示扫描器识别到的交易过程。',
+    addressGraphCopy: '用关键地址和资产记录概括这笔交易中“谁参与了、资产往哪里走”。',
+    sequenceDiagram: '调用顺序图',
+    sequenceDiagramCopy: '展示完整 trace 中的主要调用顺序，并高亮进入协议、借出、回调、归还和结算等关键步骤。',
     traceEvidence: '调用路径证据',
     traceEvidenceCopy: '基于 callTracer 汇总回调路径、归还路径和严格证据，说明调用链为什么支持当前判定。',
     callChain: '完整内部调用链',
@@ -244,9 +260,9 @@ const dictionaries: Record<Language, Dictionary> = {
     interactionEvidence: '交互识别证据',
     interactionEvidenceCopy: '按协议交互展开原始识别结果，便于对照扫描器究竟识别到了哪些 protocol-level interaction。',
     processTimeline: '过程时间线',
-    processTimelineCopy: '按 interaction 顺序展示入口、资产腿和验证信号，强调扫描器如何理解这笔交易。',
+    processTimelineCopy: '按 interaction 顺序展示入口、资产记录和验证信号，强调扫描器如何理解这笔交易。',
     timelineEntrypoint: '进入协议入口',
-    timelineAssetLeg: '资产腿',
+    timelineAssetLeg: '资产记录',
     timelineEvidence: '验证信号',
     callbackSeenLabel: '回调命中',
     settlementSeenLabel: '结算命中',
@@ -277,7 +293,7 @@ const dictionaries: Record<Language, Dictionary> = {
     receiver: '接收方',
     callbackTarget: '回调目标',
     verificationNotes: '验证说明',
-    leg: '资产腿',
+    leg: '记录',
     candidateLevel: '初筛级别',
     unverified: '未验证',
     nonStrict: '非严格',
@@ -285,8 +301,8 @@ const dictionaries: Record<Language, Dictionary> = {
     repaid: '归还',
     premium: '溢价',
     fee: '手续费',
-    strictLeg: '严格资产腿',
-    nonStrictLeg: '非严格资产腿',
+    strictLeg: '严格资产记录',
+    nonStrictLeg: '非严格资产记录',
     eventSeen: '事件已命中',
     eventMissing: '事件缺失',
     protocols: {
@@ -358,6 +374,8 @@ const dictionaries: Record<Language, Dictionary> = {
     detailOverviewCopy: 'Confirm the involved protocols, identified interactions, and final verdict first, then inspect addresses and evidence.',
     protocolEvidence: 'Protocol Identification Evidence',
     protocolEvidenceCopy: 'Summarize protocol matches, interaction scale, and the final verdict so the page first answers why this transaction matters.',
+    combinedEvidence: 'Call and Rule Evidence',
+    combinedEvidenceCopy: 'First inspect whether the trace shows a borrow-callback-repayment-settlement loop, then inspect why the rule layer passed or excluded the interaction.',
     protocolCountLabel: 'Protocols Involved',
     interactionCountLabel: 'Interactions Found',
     strictInteractionCountLabel: 'Strict Interactions',
@@ -371,10 +389,16 @@ const dictionaries: Record<Language, Dictionary> = {
     detectionConclusion: 'Scanner Conclusion',
     detectionConclusionCopy: 'Turn the current evidence into a short human-readable verdict for demos and reviews.',
     keyReasons: 'Key Reasons',
+    rawEvidence: 'Raw Evidence',
+    rawEvidenceCopy: 'This layer keeps the raw protocol interactions and the full internal call trace for deeper follow-up questions.',
+    expandAddressList: 'Expand participant address list',
+    expandSequenceDiagram: 'Expand call sequence view',
+    expandCallChain: 'Expand internal call raw evidence',
+    expandInteractionEvidence: 'Expand protocol interaction raw evidence',
     addressGraph: 'Address Graph',
-    addressGraphCopy: 'Summarize who participated in the transaction and where the detected asset legs moved.',
-    sequenceDiagram: 'Sequence Diagram',
-    sequenceDiagramCopy: 'Show the detected entrypoint, borrow, repay, and evidence steps in order.',
+    addressGraphCopy: 'Summarize who participated in the transaction and where the detected asset records moved.',
+    sequenceDiagram: 'Call Sequence',
+    sequenceDiagramCopy: 'Show the complete trace sequence while highlighting the key phases: protocol entry, borrow, callback, repayment, and settlement.',
     traceEvidence: 'Call Path Evidence',
     traceEvidenceCopy: 'Aggregate callback-path, repayment-path, and strict evidence from callTracer to explain why the call chain supports the verdict.',
     callChain: 'Full Internal Call Chain',
@@ -395,9 +419,9 @@ const dictionaries: Record<Language, Dictionary> = {
     interactionEvidence: 'Interaction Identification Evidence',
     interactionEvidenceCopy: 'Expand the raw protocol-level interactions so it is clear what the scanner actually identified in this transaction.',
     processTimeline: 'Process Timeline',
-    processTimelineCopy: 'Show entrypoint, asset legs, and evidence in interaction order so the scanner logic is easier to follow.',
+    processTimelineCopy: 'Show entrypoint, asset records, and evidence in interaction order so the scanner logic is easier to follow.',
     timelineEntrypoint: 'Entrypoint',
-    timelineAssetLeg: 'Asset Leg',
+    timelineAssetLeg: 'Asset Record',
     timelineEvidence: 'Evidence',
     callbackSeenLabel: 'Callback Seen',
     settlementSeenLabel: 'Settlement Seen',
@@ -428,7 +452,7 @@ const dictionaries: Record<Language, Dictionary> = {
     receiver: 'Receiver',
     callbackTarget: 'Callback Target',
     verificationNotes: 'Verification Notes',
-    leg: 'Leg',
+    leg: 'Record',
     candidateLevel: 'Candidate level',
     unverified: 'Unverified',
     nonStrict: 'Non-strict',
@@ -436,8 +460,8 @@ const dictionaries: Record<Language, Dictionary> = {
     repaid: 'repaid',
     premium: 'premium',
     fee: 'fee',
-    strictLeg: 'strict leg',
-    nonStrictLeg: 'non-strict leg',
+    strictLeg: 'strict asset record',
+    nonStrictLeg: 'non-strict asset record',
     eventSeen: 'event seen',
     eventMissing: 'event missing',
     protocols: {

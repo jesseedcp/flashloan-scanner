@@ -64,7 +64,10 @@ func BuildUniswapV2Runner(
 	}
 	var interactionVerifier scannerverifier.InteractionVerifier = verifier
 	if cfg.TraceEnabled {
-		traceVerifier, err := scannerverifier.NewUniswapV2TraceVerifier(verifier, scannertrace.NewGethProvider(rawClient))
+		traceProvider := scannertrace.NewCachedProvider(
+			scannertrace.NewPersistingProvider(scannertrace.NewGethProvider(rawClient), chainID, store),
+		)
+		traceVerifier, err := scannerverifier.NewUniswapV2TraceVerifier(verifier, traceProvider)
 		if err != nil {
 			return nil, err
 		}

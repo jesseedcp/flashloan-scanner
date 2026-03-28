@@ -82,6 +82,25 @@ func TestBuildTransactionTraceSummaryHandlesProviderErrors(t *testing.T) {
 	require.NotEmpty(t, summary.Error)
 }
 
+func TestBuildTransactionTraceSummaryFromJSON(t *testing.T) {
+	raw := `{"type":"CALL","from":"0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","to":"0x1111111111111111111111111111111111111111","input":"0x","output":"0x","error":"","revertReason":"","calls":[{"type":"CALL","from":"0x1111111111111111111111111111111111111111","to":"0x2222222222222222222222222222222222222222","input":"0x12345678","output":"0x","error":"","revertReason":"","calls":[]}]}`
+	summary := buildTransactionTraceSummaryFromJSON(raw, []InteractionDetailResult{{
+		InteractionID:    "interaction-1",
+		Protocol:         "aave_v3",
+		Entrypoint:       "flashLoanSimple",
+		ProviderAddress:  "0x1111111111111111111111111111111111111111",
+		ReceiverAddress:  "0x2222222222222222222222222222222222222222",
+		Verified:         true,
+		Strict:           true,
+		CallbackSeen:     true,
+		SettlementSeen:   true,
+		RepaymentSeen:    true,
+		VerificationNotes: "stored trace",
+	}})
+	require.Equal(t, traceStatusAvailable, summary.Status)
+	require.NotEmpty(t, summary.Frames)
+}
+
 type fakeTraceSource struct {
 	provider scannertrace.Provider
 	err      error

@@ -32,6 +32,7 @@ type DB struct {
 	ProtocolInteraction dbscanner.ProtocolInteractionDB
 	InteractionAssetLeg dbscanner.InteractionAssetLegDB
 	FlashloanTx         dbscanner.FlashloanTransactionDB
+	TransactionTrace    dbscanner.TransactionTraceDB
 	ScannerCursor       dbscanner.ScannerCursorDB
 }
 
@@ -77,6 +78,7 @@ func NewDB(ctx context.Context, dbConfig config.Database) (*DB, error) {
 		ProtocolInteraction: dbscanner.NewProtocolInteractionDB(gorm),
 		InteractionAssetLeg: dbscanner.NewInteractionAssetLegDB(gorm),
 		FlashloanTx:         dbscanner.NewFlashloanTransactionDB(gorm),
+		TransactionTrace:    dbscanner.NewTransactionTraceDB(gorm),
 		ScannerCursor:       dbscanner.NewScannerCursorDB(gorm),
 	}
 	return db, nil
@@ -95,6 +97,7 @@ func (db *DB) Transaction(fn func(db *DB) error) error {
 			ProtocolInteraction: dbscanner.NewProtocolInteractionDB(gorm),
 			InteractionAssetLeg: dbscanner.NewInteractionAssetLegDB(gorm),
 			FlashloanTx:         dbscanner.NewFlashloanTransactionDB(gorm),
+			TransactionTrace:    dbscanner.NewTransactionTraceDB(gorm),
 			ScannerCursor:       dbscanner.NewScannerCursorDB(gorm),
 		}
 		return fn(txDB)

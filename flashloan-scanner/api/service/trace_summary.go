@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math/big"
 	"strings"
@@ -150,6 +151,33 @@ func buildTransactionTraceSummary(
 		}
 	}
 
+	return buildTransactionTraceSummaryFromRoot(root, interactions)
+}
+
+func buildTransactionTraceSummaryFromJSON(raw string, interactions []InteractionDetailResult) *TransactionTraceSummary {
+	if strings.TrimSpace(raw) == "" {
+		return &TransactionTraceSummary{
+			Status: traceStatusUnavailable,
+			Error:  "stored trace payload is empty",
+		}
+	}
+	var root scannertrace.CallFrame
+	if err := json.Unmarshal([]byte(raw), &root); err != nil {
+		return &TransactionTraceSummary{
+			Status: traceStatusError,
+			Error:  fmt.Sprintf("decode stored trace: %v", err),
+		}
+	}
+	return buildTransactionTraceSummaryFromRoot(&root, interactions)
+}
+
+func buildTransactionTraceSummaryFromRoot(root *scannertrace.CallFrame, interactions []InteractionDetailResult) *TransactionTraceSummary {
+	if root == nil {
+		return &TransactionTraceSummary{
+			Status: traceStatusUnavailable,
+			Error:  "trace returned no call frames",
+		}
+	}
 	flattened := flattenTraceFrames(root)
 	evidence := buildTraceInteractionEvidence(flattened, interactions)
 	tagTraceFrames(flattened, evidence)

@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math/big"
 	"strings"
@@ -12,6 +13,7 @@ import (
 	"github.com/cpchain-network/flashloan-scanner/database"
 	dbscanner "github.com/cpchain-network/flashloan-scanner/database/scanner"
 	"github.com/cpchain-network/flashloan-scanner/scanner"
+	scannertrace "github.com/cpchain-network/flashloan-scanner/scanner/trace"
 )
 
 type GormStore struct {
@@ -110,6 +112,21 @@ func (s *GormStore) UpsertTxSummary(_ context.Context, summary scanner.TxSummary
 		return err
 	}
 	return s.db.FlashloanTx.UpsertFlashloanTransactions([]dbscanner.FlashloanTransaction{item})
+}
+
+func (s *GormStore) PersistTrace(_ context.Context, chainID uint64, txHash string, root *scannertrace.CallFrame) error {
+	if root == nil || strings.TrimSpace(txHash) == "" {
+		return nil
+	}
+	payload, err := json.Marshal(root)
+	if err != nil {
+		return err
+	}
+	return s.db.TransactionTrace.UpsertTransactionTrace([]dbscanner.TransactionTrace{{
+		ChainID:   chainID,
+		TxHash:    common.HexToHash(txHash),
+		TraceJSON: string(payload),
+	}})
 }
 
 func observedTransactionToDB(item scanner.ObservedTransaction) (dbscanner.ObservedTransaction, error) {
