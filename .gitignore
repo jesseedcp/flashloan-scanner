@@ -30,8 +30,11 @@ go.work.sum
 # Editor/IDE
 .idea/
 .vscode/
+.gocache/
 flashloan-scanner.exe
 scan-console.log
+exported-results/
+启动命令.txt
 
 # Frontend dependencies and build outputs
 frontend/node_modules/

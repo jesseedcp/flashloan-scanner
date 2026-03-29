@@ -1,5 +1,43 @@
 \section{Results and Analysis}
 
-This section will present the quantitative analysis of the collected flash loan transactions. The final version should include protocol-level distribution, token distribution, amount distribution, time-series trends, and the success or failure ratio of the detected transactions.
+To test whether the implemented scanner can detect real flash-loan-like activity on Ethereum mainnet, we first replayed the system on a small validation window instead of jumping directly to large-scale coverage claims. The selected window spans block \texttt{22485844} to block \texttt{22486844}. Within this range, the prepared evaluation dataset already contains one manually confirmed representative sample for each supported protocol: Aave V3, Balancer V2, and Uniswap V2.
 
-At the current stage, the section is reserved for the final experimental output after the data collection and verification pipeline is completed.
+The purpose of this experiment is not to estimate the full prevalence of flash loans on Ethereum. Instead, it serves as an intermediate real-mainnet validation step between local development and future larger-scale experiments. In other words, the goal here is narrower: can the current rule-based prototype correctly identify real transactions from all three target protocols and justify the result with protocol-specific evidence?
+
+\subsection{Real-Window Validation Result}
+
+The scanner replay over the preloaded observed-transaction slice exported three transactions from the selected window. After manual checking, all three were accepted as valid representative samples.
+
+\begin{table}[H]
+    \centering
+    \small
+    \begin{tabular}{p{0.15\textwidth} p{0.10\textwidth} p{0.18\textwidth} p{0.22\textwidth} p{0.17\textwidth}}
+        \toprule
+        Protocol & Block & Transaction & Entrypoint & Result \\
+        \midrule
+        Aave V3 & 22485972 & \texttt{0xbe75...daa0} & \texttt{flashLoanSimple} & verified, strict \\
+        Balancer V2 & 22486336 & \texttt{0xcfb9...10d3} & \texttt{flashLoan:event} & verified, strict \\
+        Uniswap V2 & 22486344 & \texttt{0xbfe5...6165} & \texttt{swap} & verified, strict \\
+        \bottomrule
+    \end{tabular}
+    \caption{Real-mainnet validation samples detected by the flash-loan scanner in the selected block window.}
+\end{table}
+
+At the transaction level, the exported dataset contains:
+
+\begin{itemize}[leftmargin=1.5em]
+    \item 3 candidate transactions,
+    \item 3 verified transactions,
+    \item 3 strict transactions,
+    \item and 3 protocol interactions in total, one for each supported protocol.
+\end{itemize}
+
+This result is small in scale but still meaningful. It shows that the implemented pipeline is not limited to synthetic tests. The system is able to process real Ethereum mainnet transactions from the prepared evaluation set, preserve protocol-specific interaction structure, and produce a strict label supported by event- and trace-level evidence.
+
+\subsection{Protocol-Level Observations}
+
+The Aave V3 sample is the cleanest direct flash-loan case in the selected window. It appears in block \texttt{22485972} and directly reaches the official Aave V3 Pool contract. The Pool address is \texttt{0x87870Bca3F3fD633\allowbreak{}5C3F4ce8392D6935\allowbreak{}0B4fA4E2}. The call uses the explicit \texttt{flashLoanSimple} entrypoint. The scanner records one interaction with one LINK asset leg, a borrowed amount of \texttt{75 LINK}, a non-zero premium of \texttt{0.0375 LINK}, and \texttt{interestRateMode = 0}. These fields already exclude the debt-opening branch at the rule level. During verification, the interaction is further supported by both event-backed and trace-backed evidence: the callback flag is present, the repayment path is observed, and the final settlement mode is recorded as \texttt{full\_repayment}. Therefore, the Aave sample is not only a valid flash-loan-like interaction, but also the strongest direct strict sample in the current window.
+
+The Balancer V2 sample provides a different kind of evidence. It appears in block \texttt{22486336}. The official provider is the Balancer Vault. Its address is \texttt{0xBA12222222228d8B\allowbreak{}a445958a75a0704d\allowbreak{}566BF2C8}. However, the top-level transaction target is a receiver-side contract rather than the Vault itself. The receiver-side contract address is \texttt{0x2FAcE03000\allowbreak{}1ef666668B\allowbreak{}A8a423470F\allowbreak{}2470Cce954}. The scanner therefore does not rely on a naive top-level target rule. Instead, it reconstructs the candidate from the official Vault \texttt{FlashLoan} event and labels the interaction entrypoint as \texttt{flashLoan:event}. The recorded interaction contains one USDC leg with borrowed amount \texttt{270.076957} and fee \texttt{0}, and the later verification stage still confirms both callback-path and repayment-path evidence. This sample is important because it demonstrates that valid Balancer flash-loan interactions may be indirect from the transaction-entry perspective, and that event-derived candidate construction is necessary for robust detection.
+
+The Uniswap V2 sample highlights the semantic difference between flash loans and flash swaps. It appears in block \texttt{22486344} and directly reaches the official pair contract. The pair address is \texttt{0xCe407CD7b95B39d3\allowbreak{}B4d53065E711e713\allowbreak{}dd5C5999}. The call uses the \texttt{swap} entrypoint. The scanner records one strict WETH leg with borrowed amount \texttt{0.000152655674287667}, together with callback and repayment-path evidence. However, the stored settlement mode is not described as simple same-token repayment. Instead, it is recorded as \texttt{invariant\allowbreak{}\_restored}, which is the more accurate protocol-level interpretation for Uniswap V2. This sample therefore confirms that Uniswap V2 should not be forced into the same settlement narrative as Aave or Balancer. Its strict label is justified by restoration of the pair's settlement condition before the transaction ends, rather than by a plain lender-style repayment model.

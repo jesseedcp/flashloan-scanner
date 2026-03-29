@@ -199,7 +199,6 @@ export function TransactionDetail() {
         <div className="forensic-raw-panel">
           <div className="forensic-raw-panel-head">
             <strong>{copy.rawProtocolFieldsTitle}</strong>
-            <p>{copy.rawProtocolFieldsCopy}</p>
           </div>
           <div className="forensic-raw-panel-body">
             {data.interactions.map((interaction) => (
@@ -1936,9 +1935,6 @@ function getDetailCopy(isEnglish: boolean) {
     fundFlowEmpty: isEnglish ? 'No fund-flow path is available for this transaction.' : '当前没有可用于展示的资产流向路径。',
     invocationFlowEmpty: isEnglish ? 'No invocation trace is available for this transaction.' : '当前没有可用于展示的内部调用树。',
     rawProtocolFieldsTitle: isEnglish ? 'Raw Protocol Interaction Fields' : '原始协议交互字段',
-    rawProtocolFieldsCopy: isEnglish
-      ? 'Keep the interaction-level scanner fields and leg tables here for deeper follow-up.'
-      : '保留协议交互级别的扫描字段和资产记录底稿，供继续追问时查看。',
     inputDataTitle: 'Input Data',
     inputDataCopy: isEnglish ? 'Keep raw calldata folded by default.' : 'Input Data 作为原始字段折叠保留。',
     browserFieldsTitle: isEnglish ? 'Browser-style Raw Fields' : '浏览器式原始字段',

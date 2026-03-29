@@ -163,9 +163,9 @@ const STORAGE_KEY = 'scan-console-language'
 
 const dictionaries: Record<Language, Dictionary> = {
   zh: {
-    appEyebrow: '闪电贷扫描器',
-    heroTitle: '三协议实时扫描控制台',
-    heroCopy: '一次点击同时启动 Aave V3、Balancer V2 和 Uniswap V2，扫描过程中的进度与发现结果会实时写入控制台。',
+    appEyebrow: '扫描入口',
+    heroTitle: '多协议闪电贷扫描',
+    heroCopy: '配置链、区块范围与协议后启动扫描。Aave V3、Balancer V2 和 Uniswap V2 的进度、命中结果与运行日志会在同一页持续刷新。',
     socket: '连接',
     job: '任务',
     chain: '链',
@@ -322,9 +322,9 @@ const dictionaries: Record<Language, Dictionary> = {
     },
   },
   en: {
-    appEyebrow: 'Flashloan Scanner',
-    heroTitle: 'Three-Protocol Live Console',
-    heroCopy: 'One click starts Aave V3, Balancer V2, and Uniswap V2 together. Progress and findings stream into the console while the scan runs.',
+    appEyebrow: 'Scan Entry',
+    heroTitle: 'Multi-Protocol Flashloan Scan',
+    heroCopy: 'Configure the chain, block window, and protocols, then start the scan. Progress, findings, and runtime logs for Aave V3, Balancer V2, and Uniswap V2 stay updated on the same page.',
     socket: 'Socket',
     job: 'Job',
     chain: 'Chain',

@@ -1,5 +1,39 @@
 \section{Case Studies}
 
-This section will include representative examples of flash loan transactions and explain their execution logic step by step. Suitable case studies may include arbitrage, liquidation, collateral swaps, or abnormal patterns observed in the dataset.
+To make the detection results easier to interpret, we selected one manually validated real-mainnet sample for each supported protocol. The goal of these case studies is not to fully reconstruct the trading strategy of the user, but to show how the scanner connects protocol-specific entrypoints, callback behavior, repayment evidence, and final strict labels.
 
-Each case study should connect the protocol-level interaction pattern with the actual on-chain behavior observed in a transaction.
+\subsection{Case 1: Aave V3 Flash Loan}
+
+The first case is transaction \texttt{0xbe758794...f6daa0} in block \texttt{22485972} on May 15, 2025. The top-level transaction directly targets the official Aave V3 Pool and uses the \texttt{flashLoanSimple} entrypoint. The scanner records one interaction and one strict asset leg. The borrowed asset is LINK, with amount \texttt{75000000000000000000}, and the recorded premium is \texttt{37500000000000000}.
+
+This case is especially useful because it matches the cleanest direct flash-loan pattern in the current prototype. The interaction enters Aave through an explicit flash-loan interface rather than through an indirect event-only path. The stored result records \texttt{callback\_seen = true}, \texttt{settlement\_seen = true}, and \texttt{repayment\_seen = true}. In addition, the asset leg has \texttt{interestRateMode = 0}, so it does not fall into Aave's debt-opening branch. The trace summary also records callback-frame and repayment-path evidence.
+
+Therefore, this transaction is a representative strict Aave V3 flash-loan sample: it directly reaches the official Pool, executes the expected callback structure, and shows full-repayment evidence without opening debt.
+
+\subsection{Case 2: Balancer V2 Flash Loan}
+
+The second case is transaction \texttt{0xcfb9ce12...cd1110d3} in block \texttt{22486336} on May 15, 2025. The provider side of the interaction is the official Balancer Vault \texttt{0xBA12222222228d8Ba445958a75a0704d566BF2C8}, but the top-level transaction target is a receiver-side contract instead of the Vault itself. The scanner labels the entrypoint as \texttt{flashLoan:event}, records one strict interaction, and stores one USDC leg with borrowed amount \texttt{270076957} and fee \texttt{0}.
+
+This case demonstrates why Balancer detection cannot rely only on top-level \texttt{tx.to} matching. The candidate interaction is recovered from the official Vault \texttt{FlashLoan} event, and the final result is strengthened by callback-path and repayment-path evidence from the trace summary. The interaction also records \texttt{callback\_target = receiver\_address}, which is consistent with Balancer's recipient-side execution model.
+
+As a result, this transaction is a representative strict Balancer V2 flash-loan sample, but it also exposes an important design lesson: real Balancer transactions may invoke the Vault indirectly, so event-derived candidate construction is necessary.
+
+\subsection{Case 3: Uniswap V2 Flash Swap}
+
+The third case is transaction \texttt{0xbfe5657b...b1a6165} in block \texttt{22486344} on May 15, 2025. The top-level transaction reaches the official Uniswap V2 pair \texttt{0xCe407CD7b95B39d3B4d53065E711e713dd5C5999} and uses the \texttt{swap} entrypoint. The scanner records one strict interaction and one strict asset leg, with WETH borrowed on the \texttt{token1} side in amount \texttt{152655674287667}. The final settlement mode is stored as \texttt{invariant\_restored}.
+
+This case is important because Uniswap V2 does not expose a dedicated \texttt{flashLoan} function. Instead, flash-loan-like behavior appears inside the pair swap mechanism. The scanner therefore uses a different pattern from Aave and Balancer. In this sample, the trace summary records callback evidence, repayment-path evidence, and verification notes that explicitly describe the result as event-backed and trace-backed strict verification. This supports the interpretation that the pair's settlement condition is restored before the transaction completes.
+
+Accordingly, this transaction is a representative strict Uniswap V2 flash-swap sample. At the same time, it highlights a semantic difference from explicit flash-loan providers: the strongest explanation is not ``borrow and repay the exact same asset in a simple lender model,'' but ``borrow through swap, execute callback logic, and restore the pair-level settlement condition.''
+
+\subsection{Case-Study Summary}
+
+Together, these three cases show that the prototype does not depend on a single uniform signature. Instead, it applies protocol-specific logic:
+
+\begin{itemize}[leftmargin=1.5em]
+    \item direct flash-loan entrypoint plus repayment evidence for Aave V3,
+    \item official Vault event plus callback and repayment evidence for Balancer V2,
+    \item and pair swap plus callback and invariant-restoration evidence for Uniswap V2.
+\end{itemize}
+
+This is exactly the intended design of the project. The common abstraction is ``borrow, execute callback logic, and satisfy settlement before the transaction ends,'' but the concrete detection rules are specialized for each protocol.

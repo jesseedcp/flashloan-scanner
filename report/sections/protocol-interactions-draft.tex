@@ -4,7 +4,7 @@ This section summarizes how three representative protocols expose flash-loan-lik
 
 \subsection{Aave}
 
-Aave provides explicit flash loan interfaces through \texttt{flashLoan(...)} and \texttt{flashLoanSimple(...)}. The user usually interacts with Aave through a receiver contract rather than calling the protocol as an externally owned account only. After the receiver contract requests the loan, Aave Pool transfers the requested asset or assets and then invokes the callback function \texttt{executeOperation(...)}. Inside this callback, the receiver contract can perform arbitrage, liquidation, debt restructuring, or token swaps. Before the transaction ends, the receiver contract must make sure that Aave can recover the borrowed principal together with the premium. If this condition is not satisfied, the whole transaction reverts.
+Aave exposes explicit flash-loan entrypoints. The two main ones are \texttt{flashLoan(...)} and \texttt{flashLoanSimple(...)}. The user usually interacts with Aave through a receiver contract rather than calling the protocol as an externally owned account only. After the receiver contract requests the loan, Aave Pool transfers the requested asset or assets and then invokes the callback function \texttt{executeOperation(...)}. Inside this callback, the receiver contract can perform arbitrage, liquidation, debt restructuring, or token swaps. Before the transaction ends, the receiver contract must make sure that Aave can recover the borrowed principal together with the premium. If this condition is not satisfied, the whole transaction reverts.
 
 Aave's interaction flow is suitable for flash loan detection because it exposes clear protocol entrypoints and an explicit callback-based execution structure.
 

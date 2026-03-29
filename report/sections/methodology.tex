@@ -1,5 +1,63 @@
 \section{Methodology}
 
-Our methodology consists of three stages. First, we collect candidate transactions from known flash loan protocols and related on-chain signals. Second, we verify whether these candidate transactions follow the flash loan execution pattern of borrowing, callback-based execution, and repayment within the same transaction. Third, we analyze the verified transactions and summarize their usage patterns.
+This project uses a rule-based methodology rather than a black-box statistical classifier. The reason is that flash loans are protocol-defined behaviors with explicit entrypoints, callback conventions, and settlement conditions. For a course project, protocol-aware rules are easier to explain, validate, and refine than a model that only outputs a label without an interpretable execution path.
 
-The first version of the detector uses protocol-specific rules derived from official documentation and prior studies. For example, the detector can look for Aave flash loan calls and callbacks, Balancer Vault flash loan invocations, or Uniswap V2 flash swap structures. This design keeps the detection logic interpretable and suitable for manual validation.
+\subsection{Engineering Definition}
+
+We adopt an engineering definition of a strict flash-loan-like interaction. An interaction is treated as strict if, within one successful transaction, a known provider or pair contract first releases assets, the receiver then enters the protocol-defined callback or settlement window, and the transaction finishes only after the protocol's settlement predicate is satisfied. This wording is intentionally broader than ``repay principal plus fee'' because the three supported protocols do not use exactly the same settlement logic. In Aave and Balancer, strict settlement usually appears as repayment of principal together with the required premium or fee. In Uniswap V2, the more fundamental requirement is that the pair-level invariant is restored before the transaction ends.
+
+\subsection{Rule Construction Basis}
+
+Our identification method was not built from a large pre-labeled training dataset. Instead, it was first designed in a protocol-driven manner and then refined through real-data validation. Specifically, we first studied the official implementations and execution flows of Aave V3, Balancer V2, and Uniswap V2, and extracted the core behavioral patterns of flash loans or flash swaps, including lender-side asset release, callback-based execution, same-transaction settlement, and transaction reversion when settlement conditions are not satisfied. Based on these protocol mechanisms, we formalized the identification logic into three decision levels, namely \texttt{candidate}, \texttt{verified}, and \texttt{strict}.
+
+After the rules were designed, we further validated them against real Ethereum mainnet transaction data in order to check whether the protocol-derived patterns were consistent with actual on-chain interactions. This validation process was used to tighten candidate extraction, verification conditions, and strictness boundaries, especially in cases where real transactions did not follow the simplest top-level call pattern. Therefore, the proposed method is essentially protocol-rule-driven and real-sample-validated, rather than a supervised model trained on a pre-existing flash-loan dataset.
+
+\subsection{Detection Granularity}
+
+The scanner does not treat the entire transaction as the only unit of analysis. Instead, it stores results at three levels.
+
+\begin{itemize}[leftmargin=1.5em]
+    \item \textbf{Interaction}: one flash-loan or flash-swap process initiated from a specific provider or pair.
+    \item \textbf{Asset leg}: one concrete borrowed token and its settlement outcome inside an interaction.
+    \item \textbf{Transaction}: a chain-level summary stating whether the transaction contains at least one detected interaction.
+\end{itemize}
+
+This design is necessary because one transaction may contain more than one interaction, and one interaction may involve more than one asset. In particular, Aave \texttt{flashLoan(...)} and Balancer \texttt{flashLoan(...)} both support multi-asset borrowing, while Uniswap V2 transactions may touch multiple pairs in one routing path.
+
+\subsection{Detection Pipeline}
+
+The implemented pipeline follows the same structure used by the scanner codebase: \texttt{candidate} $\rightarrow$ \texttt{verified} $\rightarrow$ \texttt{strict}.
+
+First, the extractor generates \texttt{candidate} interactions by checking official protocol addresses, known entrypoint selectors, and protocol-specific events. At this stage, the goal is recall-oriented filtering rather than final confirmation.
+
+Second, the verifier upgrades a candidate to \texttt{verified} if the interaction matches the expected protocol structure. Depending on the protocol, this includes lender-side asset release, receiver-side callback evidence, successful transaction status, and consistent event fields. A verified result therefore means that the interaction is no longer only a suspicious transaction; it already matches a recognizable flash-loan pattern.
+
+Third, the verifier upgrades a verified interaction to \texttt{strict} when stronger settlement evidence is available and protocol-specific exclusions are handled correctly. The strict label is the main label used in this report because it corresponds to the engineering definition introduced above.
+
+\subsection{Protocol-Specific Rules}
+
+Although the three supported protocols share the high-level pattern of borrow, execute callback logic, and settle within one transaction, their concrete rules are intentionally specialized rather than forced into one uniform signature.
+
+\subsubsection{Aave V3}
+
+For Aave V3, candidate interactions are generated from the official Pool contract, primarily through the explicit entrypoints \texttt{flashLoan(...)} and \texttt{flashLoanSimple(...)}. The verifier then checks whether the interaction is consistent with Aave's flash-loan semantics, including aligned event fields, receiver-side callback evidence, and settlement evidence for the borrowed asset legs.
+
+The most important boundary condition is \texttt{interestRateMode}. Aave \texttt{flashLoan(...)} can open debt positions instead of requiring same-transaction settlement. Therefore, the scanner only treats Aave interactions as strict flash loans when the corresponding leg satisfies the zero-interest-rate mode branch. In practice, \texttt{flashLoanSimple(...)} is the cleanest direct case, while \texttt{flashLoan(...)} is included in the strict dataset only when its settlement path remains atomic rather than debt-opening.
+
+\subsubsection{Balancer V2}
+
+For Balancer V2, the official Vault is the provider-side anchor. Candidate interactions can come either from a direct Vault flash-loan entrypoint or from an official Vault flash-loan event observed inside a more indirect transaction. This fallback is important because real Balancer transactions are not always top-level calls to the Vault itself.
+
+An interaction is upgraded to verified or strict when the evidence shows the expected Balancer structure: Vault-side asset release, recipient-side callback behavior, and repayment-path evidence before transaction completion. The recorded fee is preserved even when it is zero, because zero fee is still semantically meaningful and should not be confused with missing data.
+
+\subsubsection{Uniswap V2}
+
+For Uniswap V2, the scanner targets flash swaps rather than an explicit \texttt{flashLoan(...)} API. Candidate interactions are generated from official pair \texttt{swap(...)} calls with non-empty callback data or equivalent supporting evidence from the stored transaction context. The verifier then checks whether the pair releases assets, whether callback execution consistent with \texttt{uniswapV2Call(...)} is observed, and whether the transaction settles successfully.
+
+The strict label for Uniswap V2 is based on invariant restoration rather than a simplistic ``return the same token'' rule. This distinction is necessary because a flash swap may settle through the opposite side of the pair as long as the pair's required economic condition is restored before the transaction ends.
+
+\subsection{Trace-Backed Strengthening}
+
+The current prototype supports a stronger verification mode when transaction trace information is available. In this mode, the scanner records whether callback frames, settlement-path frames, and repayment-path frames are actually visible in the execution trace. Trace information is not the only signal used by the system, but it significantly improves the explainability of strict labels, especially for indirect Balancer calls and Uniswap V2 flash swaps, where event evidence alone may be insufficient for a convincing case study.
+
+Overall, the methodology is designed to balance precision, interpretability, and implementation feasibility. It is precise enough to distinguish among the three protocol families, interpretable enough for manual validation, and lightweight enough to implement within the scope of the course project.

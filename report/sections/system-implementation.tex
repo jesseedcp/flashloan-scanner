@@ -1,0 +1,114 @@
+\section{System Architecture}
+
+This section combines the engineering view of flash-loan identification with the backend workflow that implements it. Rather than separating methodology and implementation into two loosely connected chapters, we explain the rule basis, analysis granularity, and detection pipeline together with the five-stage processing architecture that turns raw chain data into structured results for storage, export, and frontend presentation.
+
+\subsection{Rule Basis and Analysis Model}
+
+The implemented scanner uses a rule-based approach rather than a black-box statistical classifier. This choice follows directly from the nature of flash loans: they are protocol-defined behaviors with explicit entrypoints, callback conventions, and settlement conditions. For this reason, the system first derives recognizable execution patterns from the official designs of Aave V3, Balancer V2, and Uniswap V2, and then turns these protocol behaviors into three decision levels, namely \texttt{candidate}, \texttt{verified}, and \texttt{strict}.
+
+Within this project, an interaction is treated as a strict flash-loan-like interaction when, inside one successful transaction, a known provider or pair contract first releases assets, the receiver then enters the protocol-defined callback or settlement window, and the transaction finishes only after the protocol's settlement predicate is satisfied. This wording is intentionally broader than ``repay principal plus fee'' because the supported protocols do not use exactly the same settlement semantics. Aave and Balancer usually settle through repayment of principal together with the required fee or premium, while Uniswap V2 is more naturally characterized by pair-level invariant restoration.
+
+The rules were not trained from a pre-labeled flash-loan dataset. Instead, they were constructed from protocol mechanisms and then refined through validation against real mainnet transactions. This protocol-rule-driven design makes the identification results easier to explain, audit, and correct when a real transaction follows an indirect but still valid execution path.
+
+The scanner does not treat the whole transaction as the only unit of analysis. Instead, it organizes results at three levels: \textbf{interaction}, \textbf{asset leg}, and \textbf{transaction}. An interaction represents one flash-loan or flash-swap process anchored at a provider or pair contract. An asset leg represents one concrete borrowed token and its settlement outcome inside that interaction. A transaction summary records whether the transaction contains at least one detected interaction. This layered design is necessary because one transaction may contain more than one interaction, and one interaction may involve more than one borrowed asset.
+
+On top of this data model, the implemented detection pipeline follows the same progression used by the scanner codebase: \texttt{candidate} $\rightarrow$ \texttt{verified} $\rightarrow$ \texttt{strict}. Candidate extraction is recall-oriented and aims to capture transactions that match protocol entrypoints, official events, or callback hints. Verification then confirms whether the interaction matches the expected provider-side and receiver-side behavior. The strict label is reserved for interactions with stronger settlement evidence and correct handling of protocol-specific boundary conditions, including debt-opening exclusion in Aave, event-derived but still valid Vault-mediated Balancer calls, and invariant restoration in Uniswap V2.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.98\textwidth]{figures/system-architecture-workflow.pdf}
+    \caption{Five-stage backend workflow of the flash-loan scanner.}
+    \label{fig:system-architecture-workflow}
+\end{figure}
+
+Figure~\ref{fig:system-architecture-workflow} illustrates the five-stage backend workflow of the system. In Stage 1, the backend acquires the transaction context needed for analysis. In Stage 2, it extracts protocol-specific candidate interactions. In Stage 3, it applies protocol-aware verification and upgrades supported interactions to \texttt{verified} or \texttt{strict}. In Stage 4, it persists structured results into PostgreSQL tables. Finally, in Stage 5, the frontend retrieves detection results, progress information, and transaction details from the backend through API and WebSocket interfaces for visualization.
+
+\subsection{Five-Stage Backend Workflow}
+
+\paragraph{Step 1: Raw Data Acquisition}
+The first stage is responsible for obtaining the raw transaction context needed by the scanner. In the standard execution path, the runner first queries indexed protocol-related event records within the configured block range and extracts the corresponding transaction hashes. These hashes are then deduplicated so that a transaction emitting multiple relevant events is fetched only once. For each unique hash, the backend calls the Ethereum RPC endpoint to obtain the transaction body, the transaction receipt, and the resolved sender address. The returned fields are normalized into the internal \texttt{ObservedTransaction} structure and upserted into the \texttt{observed\_transactions} table. Later stages therefore read a consistent database-backed transaction view rather than raw RPC responses.
+
+In replay-style validation runs, the acquisition stage can skip live transaction fetching and directly reuse preloaded \texttt{observed\_transactions}. This branch is controlled by the scanner configuration and is useful when the report is evaluated on a prepared real-mainnet window. It is also important to distinguish transaction acquisition from trace acquisition: transaction traces are not bulk-fetched here. Instead, when trace-aware verification is enabled, traces are requested later and only for the interactions that reach the verification stage.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.96\textwidth]{figures/raw-data-acquisition-detail.pdf}
+    \caption{Step 1: Raw Data Acquisition.}
+    \label{fig:raw-data-acquisition-detail}
+\end{figure}
+
+Figure~\ref{fig:raw-data-acquisition-detail} zooms into the first stage of the backend workflow. It shows how the runner chooses between live fetching and replay mode, how indexed event records are used to narrow the search space, how transaction hashes are deduplicated before RPC access, and how the fetched results are normalized into the internal transaction store that feeds the later candidate-extraction stage.
+
+\paragraph{Step 2: Candidate Transaction Extraction}
+
+The second stage converts the normalized transactions from Step 1 into protocol-aware intermediate objects. In the current implementation, each protocol runner is built with one \texttt{CandidateExtractor} implementation, and that extractor iterates through the observed transaction list one item at a time. The goal is not yet to make a final flash-loan judgment. Instead, the extractor ABI-decodes the transaction input, checks protocol-specific entry conditions, and emits structured \texttt{CandidateInteraction} and \texttt{InteractionLeg} records that preserve the evidence needed for later verification.
+
+For Aave V3, the extractor first requires that \texttt{tx.to} is an official Pool address. It then decodes the calldata with the Pool ABI and accepts only \texttt{flashLoan} or \texttt{flashLoanSimple}. Once a valid entrypoint is recognized, the extractor unpacks fields such as the receiver address, borrowed assets, borrowed amounts, and interest-rate modes, and immediately turns them into one interaction together with one borrowed-asset leg per asset. This means that the candidate stage already records important later-stage evidence such as \texttt{interestRateMode} for each leg.
+
+For Balancer V2, the extractor has two paths. It first tries the direct top-level Vault \texttt{flashLoan} call path. If that path does not match, it falls back to the stored contract-event view for the same transaction hash, searches for official Vault \texttt{FlashLoan} events, and reconstructs event-derived candidates from those logs. The extractor groups related events by provider and recipient before emitting the interaction and its legs. This fallback is essential because real Balancer flash-loan transactions are not always top-level calls to the Vault itself.
+
+For Uniswap V2, the extractor first requires that \texttt{tx.to} is an official pair. It then decodes the calldata with the Pair ABI, accepts only the \texttt{swap} method, rejects transactions with empty callback data, and loads the stored pair metadata, including the factory address and token identities. Borrowed-asset legs are emitted only when \texttt{amount0Out} or \texttt{amount1Out} is positive, so the resulting candidate already records which side of the pair was released to the receiver.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.98\textwidth]{figures/candidate-extraction-detail.pdf}
+    \caption{Step 2: Candidate Transaction Extraction.}
+    \label{fig:candidate-extraction-detail}
+\end{figure}
+
+Figure~\ref{fig:candidate-extraction-detail} shows that Step 2 is more than a loose suspicious-transaction filter. It is a structured construction stage in which protocol-specific extractors decode call data, apply protocol entry rules, optionally consult stored event logs, and emit interaction-level and asset-leg-level candidate records for the next verification stage.
+
+\paragraph{Step 3: Protocol-Specific Verification}
+
+The third stage is executed once per candidate interaction. The verifier first reloads the observed transaction by transaction hash and rejects the interaction immediately if the transaction did not succeed. It then reloads the provisional asset legs by interaction ID and fetches the stored contract events emitted in the same transaction. In other words, Step 3 does not verify candidates only from calldata. It re-checks the candidate against transaction status, persisted legs, and event evidence from the same execution.
+
+For Aave V3, the base verifier matches official Pool \texttt{FlashLoan} events emitted by the provider address. Each borrowed leg must match the event on three fields at once: borrowed asset, borrowed amount, and receiver address. If one leg does not match, the whole interaction is rejected. When a match is found, the verifier also reads the premium and the \texttt{interestRateMode}. This field is the key boundary condition for Aave: if the mode is non-zero, the interaction is treated as a verified but non-strict debt-opening path rather than a strict same-transaction flash loan. Otherwise, the leg is marked as a strict full-repayment leg.
+
+For Balancer V2, the base verifier matches official Vault \texttt{FlashLoan} events. Each stored leg must match the event on token address, borrowed amount, and recipient address. When all legs match, the verifier copies the fee amount into the leg record and marks the interaction as verified and strict with \texttt{full\_repayment} semantics. This event-backed path is also what allows event-derived Balancer candidates from Step 2 to become valid findings even when the top-level call is not directed to the Vault.
+
+For Uniswap V2, the base verifier first requires that the candidate carries non-empty swap callback data. It then matches official Pair \texttt{Swap} events emitted by the provider pair. A valid match requires both the receiver-side \texttt{to} address and the output-side amounts to align with the previously extracted borrowed legs. Once matched, the verifier fills the observed input-side amounts from the swap event and marks the settlement mode as \texttt{invariant\_restored}. This is why the strict label for Uniswap V2 is tied to invariant restoration rather than to a naive same-token repayment rule.
+
+When trace-aware verification is enabled, a protocol-specific trace wrapper is applied on top of the base event-backed result. This wrapper requests \texttt{debug\_traceTransaction} only after the base verifier has already accepted the interaction. If the trace endpoint is unavailable, the verifier falls back to the event-based result and appends a note explaining that trace-backed strengthening could not be performed. If the trace is available, the wrapper checks for direct callback evidence from provider to receiver and then looks for repayment-path or invariant-restoration-path evidence in the call tree. Missing callback evidence invalidates the interaction entirely; missing repayment-path evidence downgrades a strict result to a merely verified one. Aave keeps an additional special case here: even with trace support, interactions containing debt opening remain non-strict.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.98\textwidth]{figures/protocol-verification-detail.pdf}
+    \caption{Step 3: Protocol-Specific Verification.}
+    \label{fig:protocol-verification-detail}
+\end{figure}
+
+Figure~\ref{fig:protocol-verification-detail} highlights the layered structure of Step 3. Verification first passes through a common transaction-success and event-loading stage, then through protocol-specific event matching, and finally through an optional trace-backed strengthening stage. The output is not just a boolean label, but a structured \texttt{VerifiedInteraction} together with updated legs that record premiums, fees, settlement modes, and strictness annotations.
+
+\paragraph{Step 4: Persistence of Detection Results}
+
+The fourth stage is not a single bulk insert at the end of the pipeline. Instead, persistence happens incrementally as the protocol runner advances through extraction, verification, and aggregation. Immediately after Step 2, the runner first writes candidate-level interaction rows and then stores the extracted borrowed-asset legs. Concretely, the interaction rows are upserted into \texttt{protocol\_interactions}, while the leg sets are written into \texttt{interaction\_asset\_legs}. These two writes preserve the candidate state before any verification result is applied.
+
+During Step 3, persistence continues on an interaction-by-interaction basis. The verifier may return a verification result together with an updated set of asset legs. The runner then writes the verification outcome back into the existing interaction row by updating the stored verification flags, callback and repayment observations, debt-opening markers, and explanatory notes in \texttt{protocol\_interactions}. If the verifier also refines the leg-level evidence, the runner replaces the previously stored leg set so that premiums, fees, repayment amounts, strictness flags, and settlement modes are reflected in \texttt{interaction\_asset\_legs}. When trace-backed verification is enabled, the trace provider persists the fetched call tree into \texttt{transaction\_traces} as a separate side effect.
+
+After all interactions inside the block window have been processed, the runner collects unique transaction hashes and calls the transaction aggregator. The aggregator reads all protocol interactions for one transaction, derives transaction-level flags and counts, and upserts the resulting summary into \texttt{flashloan\_transactions}. As a result, Step 4 produces a layered result store rather than a single denormalized table: transaction context is preserved in \texttt{observed\_transactions}, interaction-level decisions in \texttt{protocol\_interactions}, asset-level evidence in \texttt{interaction\_asset\_legs}, transaction summaries in \texttt{flashloan\_transactions}, and optional call trees in \texttt{transaction\_traces}.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.98\textwidth]{figures/result-persistence-detail.pdf}
+    \caption{Step 4: Persistence of Detection Results.}
+    \label{fig:result-persistence-detail}
+\end{figure}
+
+Figure~\ref{fig:result-persistence-detail} shows that persistence is interleaved with the scanner pipeline. Candidate extraction first creates the initial interaction and leg rows, verification then mutates those rows with stronger evidence, optional trace collection persists call trees, and transaction aggregation finally writes the transaction summary consumed by later APIs and reports.
+
+\paragraph{Step 5: API Serving and Frontend Presentation}
+
+The fifth stage serves the stored results through two complementary backend interfaces. The first is the live scan path used by the scan console. The frontend opens a WebSocket connection to \texttt{/ws/scan} and sends a \texttt{start\_scan} message containing the chain ID, block window, trace flag, and selected protocols. The WebSocket handler creates a job, subscribes the client to job events, and triggers \texttt{RunnerBridge.RunJobAsync}. As protocol runners execute, a \texttt{JobObserver} converts runner events into job-manager updates. The job manager then broadcasts structured messages such as \texttt{job\_progress}, \texttt{protocol\_progress}, \texttt{finding}, and \texttt{log}. On the frontend side, the scan store consumes these messages and updates the summary counters, protocol progress cards, findings table, and live log panel in real time.
+
+The second interface is the HTTP query path used for detailed inspection. For example, the transaction-detail page calls \texttt{GET /api/v1/transactions/:txHash?chain\_id=...}. The HTTP handler forwards the request to the query service. In the current implementation, this call reaches \texttt{QueryService} method \texttt{GetTransactionDetail}, which assembles a full response by combining transaction-level summaries, protocol interactions, stored asset legs, observed transaction fields, stored traces, and derived forensics views such as address-role summaries, timelines, fund-flow graphs, and invocation-flow trees. The frontend transaction-detail page then renders this structured payload into the browser-style sections used in the classroom demo.
+
+This design keeps the frontend intentionally thin. The browser does not decode calldata, run verification rules, or talk to chain nodes directly. Instead, it consumes backend-produced summaries and evidence models through WebSocket and HTTP interfaces. The same stored result set can therefore support live progress reporting, transaction drill-down pages, exported reports, and future downstream consumers without duplicating detection logic in the UI layer.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.98\textwidth]{figures/api-frontend-serving-detail.pdf}
+    \caption{Step 5: API Serving and Frontend Presentation.}
+    \label{fig:api-frontend-serving-detail}
+\end{figure}
+
+Figure~\ref{fig:api-frontend-serving-detail} separates the live WebSocket path from the HTTP detail-query path. The scan console receives pushed job events for runtime visibility, while the detail page performs explicit API fetches for transaction-level forensics. Both paths are backed by the same stored result tables, which keeps the backend as the single source of truth for detection and presentation.

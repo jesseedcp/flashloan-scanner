@@ -572,12 +572,58 @@ input {
 }
 
 .table-shell {
+  flex: 1;
+  min-height: 0;
   overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable both-edges;
 }
 
 .data-grid {
   grid-template-columns: minmax(0, 1.45fr) minmax(320px, 0.9fr);
-  align-items: start;
+  align-items: stretch;
+}
+
+.data-grid > .panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.table-panel,
+.log-panel {
+  min-height: 540px;
+}
+
+.table-panel .table-shell,
+.log-panel .log-list {
+  max-height: 540px;
+}
+
+.table-shell::-webkit-scrollbar,
+.log-list::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.table-shell::-webkit-scrollbar-thumb,
+.log-list::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background: rgba(148, 163, 184, 0.55);
+  background-clip: padding-box;
+}
+
+.table-shell::-webkit-scrollbar-track,
+.log-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.table-shell thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: rgba(251, 250, 246, 0.98);
 }
 
 table {
@@ -634,15 +680,14 @@ td {
   background: rgba(255, 255, 255, 0.7);
 }
 
-.log-panel {
-  min-height: 440px;
-}
-
 .log-list {
   display: grid;
   gap: 8px;
-  max-height: 540px;
+  flex: 1;
+  min-height: 0;
   overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable both-edges;
 }
 
 .log-item {
@@ -1712,6 +1757,16 @@ td {
   .masthead,
   .data-grid {
     grid-template-columns: 1fr;
+  }
+
+  .table-panel,
+  .log-panel {
+    min-height: auto;
+  }
+
+  .table-panel .table-shell,
+  .log-panel .log-list {
+    max-height: 480px;
   }
 
   .signal-surface {

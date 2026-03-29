@@ -1,5 +1,51 @@
 \section{Data Collection}
 
-The project collects data from Ethereum mainnet. The data collection stage is designed to support both candidate generation and transaction verification. For each detected or candidate transaction, the dataset should preserve at least the transaction hash, block number, timestamp, protocol, borrower or receiver address, borrowed token, amount, fee, and verification status.
+The final experiment in this report focuses on Ethereum mainnet. During development, we first used local protocol fixtures to validate that the scanner pipeline could write candidates, upgrade them to verified or strict interactions, and aggregate the results into transaction-level summaries. After this local stage, we moved to a small database-backed real-mainnet validation window so that the report would contain at least one real sample for each supported protocol.
 
-In the current report structure, this section serves as a placeholder for the final implementation details, including the exact block range, data source, and storage format used by the group.
+\subsection{Scope of the Collected Data}
+
+The current project scope is limited to three protocol families on Ethereum mainnet:
+
+\begin{itemize}[leftmargin=1.5em]
+    \item Aave V3 flash loans,
+    \item Balancer V2 Vault flash loans,
+    \item and Uniswap V2 flash swaps.
+\end{itemize}
+
+This scope matches the actual implementation of the scanner. We intentionally do not claim coverage of every flash-loan-capable protocol on Ethereum, and we also do not merge V2-style forks into the main dataset of this report.
+
+\subsection{Real-Mainnet Validation Window}
+
+For the real-data stage, we selected a short validation window from block \texttt{22485844} to block \texttt{22486844}. This window was chosen pragmatically rather than statistically: a preloaded local database slice in this range already contained one manually confirmed representative sample for each supported protocol while remaining small enough for detailed manual checking.
+
+The selected window contains the following three reference transactions:
+
+\begin{itemize}[leftmargin=1.5em]
+    \item Aave V3: \texttt{0xbe75...daa0},
+    \item Balancer V2: \texttt{0xcfb9...10d3},
+    \item Uniswap V2: \texttt{0xbfe5...6165}.
+\end{itemize}
+
+The purpose of this dataset is to validate real-sample detection capability. It is not intended to estimate the overall frequency of flash loans on Ethereum mainnet.
+
+\subsection{Collected Fields and Storage Structure}
+
+The implemented scanner preserves data at the transaction, interaction, and asset-leg levels introduced in the methodology section.
+
+At the \textbf{transaction} level, the exported dataset stores fields such as transaction hash, block number, timestamp, chain identifier, supported protocol flags, and whether the transaction contains at least one candidate, verified, or strict interaction.
+
+At the \textbf{interaction} level, the dataset stores provider-side and receiver-side addresses, entrypoint type, callback evidence, settlement evidence, repayment evidence, verification notes, and the final verification status. This level is the core unit for protocol-specific analysis.
+
+At the \textbf{asset-leg} level, the dataset records the borrowed token, amount, premium or fee when applicable, strictness flags, and settlement-related metadata. This level is necessary because both Aave and Balancer may involve multiple assets, and Uniswap V2 may settle under an invariant-restoration rule rather than a same-token repayment rule.
+
+\subsection{Data Sources and Export Formats}
+
+The working dataset is managed through the project's scanner pipeline and local PostgreSQL store. The implementation supports two preparation modes. In the first mode, the fetcher derives transaction hashes from locally indexed contract-event tables in a selected block range and then requests the corresponding transaction and receipt data from an Ethereum RPC endpoint. In the second mode, the scanner skips that fetching step and directly reuses preloaded \texttt{observed\_transactions} that already exist in the local database.
+
+The real-window experiment reported here uses the second mode. Its configuration replays the extractor, verifier, aggregator, and reporting logic on a prepared database slice instead of discovering transactions from scratch during report construction. For the report, we therefore use stored transaction context, decoded protocol evidence, and stored or available trace summaries to generate result views. The final validation outputs were exported in three formats: human-readable text, JSON, and CSV. These exported files make it easier to perform manual validation, prepare case studies, and reuse the results in the frontend demo and report tables.
+
+This design keeps the data collection stage closely connected to the implemented system. The report is therefore based on data produced by the prototype itself, but the current real-mainnet section should be understood as a database-backed validation replay rather than a fresh end-to-end crawl over the chain.
+
+\subsection{Current Limitation of the Dataset}
+
+The current dataset is deliberately small. It is sufficient for validating that the prototype can process real mainnet transactions from all three target protocols and preserve the evidence needed for explanation. However, it is not yet large enough to support stronger claims about market share, temporal trends, or protocol-level prevalence. A larger scan range, broader manual sampling, and a more fully automated end-to-end ingestion workflow would be required for those goals.
